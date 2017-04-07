@@ -809,6 +809,7 @@ func clientHelloInfo(c *Conn, clientHello *clientHelloMsg) *ClientHelloInfo {
 	}
 
 	return &ClientHelloInfo{
+		Raw:               clientHello.raw,
 		CipherSuites:      clientHello.cipherSuites,
 		ServerName:        clientHello.serverName,
 		SupportedCurves:   clientHello.supportedCurves,
