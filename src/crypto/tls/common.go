@@ -246,6 +246,10 @@ const (
 // ClientHelloInfo contains information from a ClientHello message in order to
 // guide certificate selection in the GetCertificate callback.
 type ClientHelloInfo struct {
+	// Raw is the underlying raw bytes of the client hello packet
+	// place it on top to prevent confilict for tls-tris
+	Raw []byte
+
 	// CipherSuites lists the CipherSuites supported by the client (e.g.
 	// TLS_RSA_WITH_RC4_128_SHA).
 	CipherSuites []uint16
