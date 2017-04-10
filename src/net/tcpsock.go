@@ -220,6 +220,24 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 	return c, nil
 }
 
+func DialTCPContext(ctx context.Context, network string, laddr, raddr *TCPAddr, control func(network, address string, c syscall.RawConn) error) (*TCPConn, error) {
+	switch network {
+	case "tcp", "tcp4", "tcp6":
+	default:
+		return nil, &OpError{Op: "dial", Net: network, Source: laddr.opAddr(), Addr: raddr.opAddr(), Err: UnknownNetworkError(network)}
+	}
+	if raddr == nil {
+		return nil, &OpError{Op: "dial", Net: network, Source: laddr.opAddr(), Addr: nil, Err: errMissingAddress}
+	}
+	sd := &sysDialer{network: network, address: raddr.String()}
+	sd.Control = control
+	c, err := sd.dialTCP(ctx, laddr, raddr)
+	if err != nil {
+		return nil, &OpError{Op: "dial", Net: network, Source: laddr.opAddr(), Addr: raddr.opAddr(), Err: err}
+	}
+	return c, nil
+}
+
 // TCPListener is a TCP network listener. Clients should typically
 // use variables of type Listener instead of assuming TCP.
 type TCPListener struct {
