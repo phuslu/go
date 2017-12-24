@@ -20,6 +20,7 @@ type clientHelloMsg struct {
 	serverName                   string
 	ocspStapling                 bool
 	scts                         bool
+	extensions                   []uint16
 	supportedCurves              []CurveID
 	supportedPoints              []uint8
 	ticketSupported              bool
@@ -361,12 +362,16 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
 	if extensionsLength != len(data) {
 		return false
 	}
+	if extensionsLength > 0 {
+		m.extensions = make([]uint16, 0, extensionsLength)
+	}
 
 	for len(data) != 0 {
 		if len(data) < 4 {
 			return false
 		}
 		extension := uint16(data[0])<<8 | uint16(data[1])
+		m.extensions = append(m.extensions, extension)
 		length := int(data[2])<<8 | int(data[3])
 		data = data[4:]
 		if len(data) < length {

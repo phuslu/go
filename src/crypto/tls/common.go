@@ -254,6 +254,10 @@ type ClientHelloInfo struct {
 	// TLS_RSA_WITH_RC4_128_SHA).
 	CipherSuites []uint16
 
+	// Extensions lists the Extensions supported by the client (e.g.
+	// ServerName).
+	Extensions []uint16
+
 	// ServerName indicates the name of the server requested by the client
 	// in order to support virtual hosting. ServerName is only set if the
 	// client is using SNI (see RFC 4366, Section 3.1).
