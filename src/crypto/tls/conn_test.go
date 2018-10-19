@@ -134,13 +134,12 @@ func TestCertificateSelection(t *testing.T) {
 
 // Run with multiple crypto configs to test the logic for computing TLS record overheads.
 func runDynamicRecordSizingTest(t *testing.T, config *Config) {
-	clientConn, serverConn := localPipe(t)
+	clientConn, serverConn := net.Pipe()
 
 	serverConfig := config.Clone()
 	serverConfig.DynamicRecordSizingDisabled = false
 	tlsConn := Server(serverConn, serverConfig)
 
-	handshakeDone := make(chan struct{})
 	recordSizesChan := make(chan []int, 1)
 	go func() {
 		// This goroutine performs a TLS handshake over clientConn and
@@ -154,7 +153,6 @@ func runDynamicRecordSizingTest(t *testing.T, config *Config) {
 			t.Errorf("Error from client handshake: %v", err)
 			return
 		}
-		close(handshakeDone)
 
 		var recordHeader [recordHeaderLen]byte
 		var record []byte
@@ -194,7 +192,6 @@ func runDynamicRecordSizingTest(t *testing.T, config *Config) {
 	if err := tlsConn.Handshake(); err != nil {
 		t.Fatalf("Error from server handshake: %s", err)
 	}
-	<-handshakeDone
 
 	// The server writes these plaintexts in order.
 	plaintext := bytes.Join([][]byte{
@@ -272,7 +269,7 @@ func (conn *hairpinConn) Close() error {
 func TestHairpinInClose(t *testing.T) {
 	// This tests that the underlying net.Conn can call back into the
 	// tls.Conn when being closed without deadlocking.
-	client, server := localPipe(t)
+	client, server := net.Pipe()
 	defer server.Close()
 	defer client.Close()
 

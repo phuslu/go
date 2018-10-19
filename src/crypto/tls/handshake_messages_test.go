@@ -20,17 +20,22 @@ var tests = []interface{}{
 
 	&certificateMsg{},
 	&certificateRequestMsg{},
+	&certificateRequestMsg13{},
 	&certificateVerifyMsg{},
 	&certificateStatusMsg{},
 	&clientKeyExchangeMsg{},
 	&nextProtoMsg{},
 	&newSessionTicketMsg{},
 	&sessionState{},
+	&encryptedExtensionsMsg{},
+	&certificateMsg13{},
+	&newSessionTicketMsg13{},
+	&sessionState13{},
 }
 
 type testMessage interface {
 	marshal() []byte
-	unmarshal([]byte) bool
+	unmarshal([]byte) alert
 	equal(interface{}) bool
 }
 
@@ -54,14 +59,14 @@ func TestMarshalUnmarshal(t *testing.T) {
 			m1 := v.Interface().(testMessage)
 			marshaled := m1.marshal()
 			m2 := iface.(testMessage)
-			if !m2.unmarshal(marshaled) {
-				t.Errorf("#%d failed to unmarshal %#v %x", i, m1, marshaled)
+			if m2.unmarshal(marshaled) != alertSuccess {
+				t.Errorf("#%d.%d failed to unmarshal %#v %x", i, j, m1, marshaled)
 				break
 			}
 			m2.marshal() // to fill any marshal cache in the message
 
 			if !m1.equal(m2) {
-				t.Errorf("#%d got:%#v want:%#v %x", i, m2, m1, marshaled)
+				t.Errorf("#%d.%d got:%#v want:%#v %x", i, j, m2, m1, marshaled)
 				break
 			}
 
@@ -72,7 +77,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 				// data is optional and the length of the
 				// Finished varies across versions.
 				for j := 0; j < len(marshaled); j++ {
-					if m2.unmarshal(marshaled[0:j]) {
+					if m2.unmarshal(marshaled[0:j]) == alertSuccess {
 						t.Errorf("#%d unmarshaled a prefix of length %d of %#v", i, j, m1)
 						break
 					}
@@ -154,7 +159,24 @@ func (*clientHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	if rand.Intn(10) > 5 {
 		m.scts = true
 	}
-
+	m.keyShares = make([]keyShare, rand.Intn(4))
+	for i := range m.keyShares {
+		m.keyShares[i].group = CurveID(rand.Intn(30000))
+		m.keyShares[i].data = randomBytes(rand.Intn(300)+1, rand)
+	}
+	m.supportedVersions = make([]uint16, rand.Intn(5))
+	for i := range m.supportedVersions {
+		m.supportedVersions[i] = uint16(rand.Intn(30000))
+	}
+	if rand.Intn(10) > 5 {
+		m.earlyData = true
+	}
+	if rand.Intn(10) > 5 {
+		m.delegatedCredential = true
+	}
+	if rand.Intn(10) > 5 {
+		m.extendedMSSupported = true
+	}
 	return reflect.ValueOf(m)
 }
 
@@ -182,6 +204,9 @@ func (*serverHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	if rand.Intn(10) > 5 {
 		m.ticketSupported = true
 	}
+	if rand.Intn(10) > 5 {
+		m.extendedMSSupported = true
+	}
 	m.alpnProtocol = randomString(rand.Intn(32)+1, rand)
 
 	if rand.Intn(10) > 5 {
@@ -190,6 +215,27 @@ func (*serverHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 		for i := range m.scts {
 			m.scts[i] = randomBytes(rand.Intn(500)+1, rand)
 		}
+	}
+
+	if rand.Intn(10) > 5 {
+		m.keyShare.group = CurveID(rand.Intn(30000) + 1)
+		m.keyShare.data = randomBytes(rand.Intn(300)+1, rand)
+	}
+	if rand.Intn(10) > 5 {
+		m.psk = true
+		m.pskIdentity = uint16(rand.Int31())
+	}
+
+	return reflect.ValueOf(m)
+}
+
+func (*encryptedExtensionsMsg) Generate(rand *rand.Rand, size int) reflect.Value {
+	m := &encryptedExtensionsMsg{}
+	if rand.Intn(10) > 5 {
+		m.alpnProtocol = randomString(rand.Intn(32)+1, rand)
+	}
+	if rand.Intn(10) > 5 {
+		m.earlyData = true
 	}
 
 	return reflect.ValueOf(m)
@@ -205,9 +251,40 @@ func (*certificateMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(m)
 }
 
+func (*certificateMsg13) Generate(rand *rand.Rand, size int) reflect.Value {
+	m := &certificateMsg13{}
+	numCerts := rand.Intn(20)
+	m.certificates = make([]certificateEntry, numCerts)
+	for i := 0; i < numCerts; i++ {
+		m.certificates[i].data = randomBytes(rand.Intn(10)+1, rand)
+		if rand.Intn(2) == 1 {
+			m.certificates[i].ocspStaple = randomBytes(rand.Intn(10)+1, rand)
+		}
+
+		numScts := rand.Intn(3)
+		for j := 0; j < numScts; j++ {
+			m.certificates[i].sctList = append(m.certificates[i].sctList, randomBytes(rand.Intn(10)+1, rand))
+		}
+	}
+	m.requestContext = randomBytes(rand.Intn(5), rand)
+	return reflect.ValueOf(m)
+}
+
 func (*certificateRequestMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	m := &certificateRequestMsg{}
 	m.certificateTypes = randomBytes(rand.Intn(5)+1, rand)
+	numCAs := rand.Intn(100)
+	m.certificateAuthorities = make([][]byte, numCAs)
+	for i := 0; i < numCAs; i++ {
+		m.certificateAuthorities[i] = randomBytes(rand.Intn(15)+1, rand)
+	}
+	return reflect.ValueOf(m)
+}
+
+func (*certificateRequestMsg13) Generate(rand *rand.Rand, size int) reflect.Value {
+	m := &certificateRequestMsg13{}
+	m.requestContext = randomBytes(rand.Intn(5), rand)
+	m.supportedSignatureAlgorithms = supportedSignatureAlgorithms
 	numCAs := rand.Intn(100)
 	m.certificateAuthorities = make([][]byte, numCAs)
 	for i := 0; i < numCAs; i++ {
@@ -257,11 +334,27 @@ func (*newSessionTicketMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(m)
 }
 
+func (*newSessionTicketMsg13) Generate(rand *rand.Rand, size int) reflect.Value {
+	m := &newSessionTicketMsg13{}
+	m.ageAdd = uint32(rand.Intn(0xffffffff))
+	m.lifetime = uint32(rand.Intn(0xffffffff))
+	m.nonce = randomBytes(1+rand.Intn(255), rand)
+	m.ticket = randomBytes(1+rand.Intn(40), rand)
+	if rand.Intn(10) > 5 {
+		m.withEarlyDataInfo = true
+		m.maxEarlyDataLength = uint32(rand.Intn(0xffffffff))
+	}
+	return reflect.ValueOf(m)
+}
+
 func (*sessionState) Generate(rand *rand.Rand, size int) reflect.Value {
 	s := &sessionState{}
 	s.vers = uint16(rand.Intn(10000))
 	s.cipherSuite = uint16(rand.Intn(10000))
 	s.masterSecret = randomBytes(rand.Intn(100), rand)
+	if rand.Intn(10) > 5 {
+		s.usedEMS = true
+	}
 	numCerts := rand.Intn(20)
 	s.certificates = make([][]byte, numCerts)
 	for i := 0; i < numCerts; i++ {
@@ -270,8 +363,22 @@ func (*sessionState) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(s)
 }
 
+func (*sessionState13) Generate(rand *rand.Rand, size int) reflect.Value {
+	s := &sessionState13{}
+	s.vers = uint16(rand.Intn(10000))
+	s.suite = uint16(rand.Intn(10000))
+	s.ageAdd = uint32(rand.Intn(0xffffffff))
+	s.maxEarlyDataLen = uint32(rand.Intn(0xffffffff))
+	s.createdAt = uint64(rand.Int63n(0xfffffffffffffff))
+	s.pskSecret = randomBytes(rand.Intn(100), rand)
+	s.alpnProtocol = randomString(rand.Intn(100), rand)
+	s.SNI = randomString(rand.Intn(100), rand)
+	return reflect.ValueOf(s)
+}
+
 func TestRejectEmptySCTList(t *testing.T) {
-	// RFC 6962, Section 3.3.1 specifies that empty SCT lists are invalid.
+	// https://tools.ietf.org/html/rfc6962#section-3.3.1 specifies that
+	// empty SCT lists are invalid.
 
 	var random [32]byte
 	sct := []byte{0x42, 0x42, 0x42, 0x42}
@@ -283,7 +390,7 @@ func TestRejectEmptySCTList(t *testing.T) {
 	serverHelloBytes := serverHello.marshal()
 
 	var serverHelloCopy serverHelloMsg
-	if !serverHelloCopy.unmarshal(serverHelloBytes) {
+	if serverHelloCopy.unmarshal(serverHelloBytes) != alertSuccess {
 		t.Fatal("Failed to unmarshal initial message")
 	}
 
@@ -308,7 +415,7 @@ func TestRejectEmptySCTList(t *testing.T) {
 	serverHelloEmptySCT[42] = byte((len(serverHelloEmptySCT) - 44) >> 8)
 	serverHelloEmptySCT[43] = byte((len(serverHelloEmptySCT) - 44))
 
-	if serverHelloCopy.unmarshal(serverHelloEmptySCT) {
+	if serverHelloCopy.unmarshal(serverHelloEmptySCT) == alertSuccess {
 		t.Fatal("Unmarshaled ServerHello with empty SCT list")
 	}
 }
@@ -326,7 +433,7 @@ func TestRejectEmptySCT(t *testing.T) {
 	serverHelloBytes := serverHello.marshal()
 
 	var serverHelloCopy serverHelloMsg
-	if serverHelloCopy.unmarshal(serverHelloBytes) {
+	if serverHelloCopy.unmarshal(serverHelloBytes) == alertSuccess {
 		t.Fatal("Unmarshaled ServerHello with zero-length SCT")
 	}
 }

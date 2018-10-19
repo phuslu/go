@@ -7,10 +7,8 @@ package tls
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"internal/testenv"
 	"io"
 	"io/ioutil"
 	"math"
@@ -332,8 +330,6 @@ func TestTLSUniqueMatches(t *testing.T) {
 }
 
 func TestVerifyHostname(t *testing.T) {
-	testenv.MustHaveExternalNetwork(t)
-
 	c, err := Dial("tcp", "www.google.com:https", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -358,11 +354,13 @@ func TestVerifyHostname(t *testing.T) {
 }
 
 func TestVerifyHostnameResumed(t *testing.T) {
-	testenv.MustHaveExternalNetwork(t)
-
 	config := &Config{
 		ClientSessionCache: NewLRUClientSessionCache(32),
+		// There is no "New ticket" sent in case TLS v1.3 is advertised.
+		// Hence forcing TLSv12
+		MaxVersion: VersionTLS12,
 	}
+
 	for i := 0; i < 2; i++ {
 		c, err := Dial("tcp", "www.google.com:https", config)
 		if err != nil {
@@ -676,7 +674,7 @@ func TestCloneNonFuncFields(t *testing.T) {
 		switch fn := typ.Field(i).Name; fn {
 		case "Rand":
 			f.Set(reflect.ValueOf(io.Reader(os.Stdin)))
-		case "Time", "GetCertificate", "GetConfigForClient", "VerifyPeerCertificate", "GetClientCertificate":
+		case "Time", "GetCertificate", "GetConfigForClient", "VerifyPeerCertificate", "GetClientCertificate", "GetDelegatedCredential":
 			// DeepEqual can't compare functions. If you add a
 			// function field to this list, you must also change
 			// TestCloneFuncFields to ensure that the func field is
@@ -699,7 +697,7 @@ func TestCloneNonFuncFields(t *testing.T) {
 			f.Set(reflect.ValueOf("b"))
 		case "ClientAuth":
 			f.Set(reflect.ValueOf(VerifyClientCertIfGiven))
-		case "InsecureSkipVerify", "SessionTicketsDisabled", "DynamicRecordSizingDisabled", "PreferServerCipherSuites":
+		case "InsecureSkipVerify", "SessionTicketsDisabled", "DynamicRecordSizingDisabled", "PreferServerCipherSuites", "Accept0RTTData":
 			f.Set(reflect.ValueOf(true))
 		case "MinVersion", "MaxVersion":
 			f.Set(reflect.ValueOf(uint16(VersionTLS12)))
@@ -711,6 +709,14 @@ func TestCloneNonFuncFields(t *testing.T) {
 			f.Set(reflect.ValueOf([]CurveID{CurveP256}))
 		case "Renegotiation":
 			f.Set(reflect.ValueOf(RenegotiateOnceAsClient))
+		case "Max0RTTDataSize":
+			f.Set(reflect.ValueOf(uint32(0)))
+		case "SessionTicketSealer":
+			// TODO
+		case "AcceptDelegatedCredential":
+			f.Set(reflect.ValueOf(false))
+		case "UseExtendedMasterSecret":
+			f.Set(reflect.ValueOf(false))
 		default:
 			t.Errorf("all fields must be accounted for, but saw unknown field %q", fn)
 		}
@@ -906,13 +912,5 @@ func BenchmarkLatency(b *testing.B) {
 				latency(b, kbps*1000, mode == "Max")
 			})
 		}
-	}
-}
-
-func TestConnectionStateMarshal(t *testing.T) {
-	cs := &ConnectionState{}
-	_, err := json.Marshal(cs)
-	if err != nil {
-		t.Errorf("json.Marshal failed on ConnectionState: %v", err)
 	}
 }

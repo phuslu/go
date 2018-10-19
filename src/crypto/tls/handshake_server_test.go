@@ -40,9 +40,12 @@ func (zeroSource) Read(b []byte) (n int, err error) {
 var testConfig *Config
 
 func allCipherSuites() []uint16 {
-	ids := make([]uint16, len(cipherSuites))
-	for i, suite := range cipherSuites {
-		ids[i] = suite.id
+	var ids []uint16
+	for _, suite := range cipherSuites {
+		if suite.flags&suiteTLS13 != 0 {
+			continue
+		}
+		ids = append(ids, suite.id)
 	}
 
 	return ids
@@ -70,7 +73,10 @@ func testClientHello(t *testing.T, serverConfig *Config, m handshakeMessage) {
 }
 
 func testClientHelloFailure(t *testing.T, serverConfig *Config, m handshakeMessage, expectedSubStr string) {
-	c, s := localPipe(t)
+	// Create in-memory network connection,
+	// send message to server. Should return
+	// expected error.
+	c, s := net.Pipe()
 	go func() {
 		cli := Client(c, testConfig)
 		if ch, ok := m.(*clientHelloMsg); ok {
@@ -198,26 +204,25 @@ func TestRenegotiationExtension(t *testing.T) {
 		cipherSuites:                 []uint16{TLS_RSA_WITH_RC4_128_SHA},
 	}
 
-	bufChan := make(chan []byte)
-	c, s := localPipe(t)
+	var buf []byte
+	c, s := net.Pipe()
 
 	go func() {
 		cli := Client(c, testConfig)
 		cli.vers = clientHello.vers
 		cli.writeRecord(recordTypeHandshake, clientHello.marshal())
 
-		buf := make([]byte, 1024)
+		buf = make([]byte, 1024)
 		n, err := c.Read(buf)
 		if err != nil {
 			t.Errorf("Server read returned error: %s", err)
 			return
 		}
+		buf = buf[:n]
 		c.Close()
-		bufChan <- buf[:n]
 	}()
 
 	Server(s, testConfig).Handshake()
-	buf := <-bufChan
 
 	if len(buf) < 5+4 {
 		t.Fatalf("Server returned short message of length %d", len(buf))
@@ -230,7 +235,7 @@ func TestRenegotiationExtension(t *testing.T) {
 	var serverHello serverHelloMsg
 	// unmarshal expects to be given the handshake header, but
 	// serverHelloLen doesn't include it.
-	if !serverHello.unmarshal(buf[5 : 9+serverHelloLen]) {
+	if serverHello.unmarshal(buf[5:9+serverHelloLen]) != alertSuccess {
 		t.Fatalf("Failed to parse ServerHello")
 	}
 
@@ -260,27 +265,22 @@ func TestTLS12OnlyCipherSuites(t *testing.T) {
 		supportedPoints:    []uint8{pointFormatUncompressed},
 	}
 
-	c, s := localPipe(t)
-	replyChan := make(chan interface{})
+	c, s := net.Pipe()
+	var reply interface{}
+	var clientErr error
 	go func() {
 		cli := Client(c, testConfig)
 		cli.vers = clientHello.vers
 		cli.writeRecord(recordTypeHandshake, clientHello.marshal())
-		reply, err := cli.readHandshake()
+		reply, clientErr = cli.readHandshake()
 		c.Close()
-		if err != nil {
-			replyChan <- err
-		} else {
-			replyChan <- reply
-		}
 	}()
 	config := testConfig.Clone()
 	config.CipherSuites = clientHello.cipherSuites
 	Server(s, config).Handshake()
 	s.Close()
-	reply := <-replyChan
-	if err, ok := reply.(error); ok {
-		t.Fatal(err)
+	if clientErr != nil {
+		t.Fatal(clientErr)
 	}
 	serverHello, ok := reply.(*serverHelloMsg)
 	if !ok {
@@ -292,7 +292,7 @@ func TestTLS12OnlyCipherSuites(t *testing.T) {
 }
 
 func TestAlertForwarding(t *testing.T) {
-	c, s := localPipe(t)
+	c, s := net.Pipe()
 	go func() {
 		Client(c, testConfig).sendAlert(alertUnknownCA)
 		c.Close()
@@ -306,7 +306,7 @@ func TestAlertForwarding(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	c, s := localPipe(t)
+	c, s := net.Pipe()
 	go c.Close()
 
 	err := Server(s, testConfig).Handshake()
@@ -316,8 +316,8 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func testHandshake(t *testing.T, clientConfig, serverConfig *Config) (serverState, clientState ConnectionState, err error) {
-	c, s := localPipe(t)
+func testHandshake(clientConfig, serverConfig *Config) (serverState, clientState ConnectionState, err error) {
+	c, s := net.Pipe()
 	done := make(chan bool)
 	go func() {
 		cli := Client(c, clientConfig)
@@ -340,11 +340,13 @@ func TestVersion(t *testing.T) {
 	serverConfig := &Config{
 		Certificates: testConfig.Certificates,
 		MaxVersion:   VersionTLS11,
+		MinVersion:   VersionTLS10,
 	}
 	clientConfig := &Config{
 		InsecureSkipVerify: true,
+		MinVersion:         VersionTLS10,
 	}
-	state, _, err := testHandshake(t, clientConfig, serverConfig)
+	state, _, err := testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -358,12 +360,14 @@ func TestCipherSuitePreference(t *testing.T) {
 		CipherSuites: []uint16{TLS_RSA_WITH_RC4_128_SHA, TLS_RSA_WITH_AES_128_CBC_SHA, TLS_ECDHE_RSA_WITH_RC4_128_SHA},
 		Certificates: testConfig.Certificates,
 		MaxVersion:   VersionTLS11,
+		MinVersion:   VersionTLS10,
 	}
 	clientConfig := &Config{
 		CipherSuites:       []uint16{TLS_RSA_WITH_AES_128_CBC_SHA, TLS_RSA_WITH_RC4_128_SHA},
 		InsecureSkipVerify: true,
+		MinVersion:         VersionTLS10,
 	}
-	state, _, err := testHandshake(t, clientConfig, serverConfig)
+	state, _, err := testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -373,7 +377,7 @@ func TestCipherSuitePreference(t *testing.T) {
 	}
 
 	serverConfig.PreferServerCipherSuites = true
-	state, _, err = testHandshake(t, clientConfig, serverConfig)
+	state, _, err = testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -394,7 +398,7 @@ func TestSCTHandshake(t *testing.T) {
 	clientConfig := &Config{
 		InsecureSkipVerify: true,
 	}
-	_, state, err := testHandshake(t, clientConfig, serverConfig)
+	_, state, err := testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -413,23 +417,25 @@ func TestCrossVersionResume(t *testing.T) {
 	serverConfig := &Config{
 		CipherSuites: []uint16{TLS_RSA_WITH_AES_128_CBC_SHA},
 		Certificates: testConfig.Certificates,
+		MinVersion:   VersionTLS10,
 	}
 	clientConfig := &Config{
 		CipherSuites:       []uint16{TLS_RSA_WITH_AES_128_CBC_SHA},
 		InsecureSkipVerify: true,
 		ClientSessionCache: NewLRUClientSessionCache(1),
 		ServerName:         "servername",
+		MinVersion:         VersionTLS10,
 	}
 
 	// Establish a session at TLS 1.1.
 	clientConfig.MaxVersion = VersionTLS11
-	_, _, err := testHandshake(t, clientConfig, serverConfig)
+	_, _, err := testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
 
 	// The client session cache now contains a TLS 1.1 session.
-	state, _, err := testHandshake(t, clientConfig, serverConfig)
+	state, _, err := testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -439,7 +445,7 @@ func TestCrossVersionResume(t *testing.T) {
 
 	// Test that the server will decline to resume at a lower version.
 	clientConfig.MaxVersion = VersionTLS10
-	state, _, err = testHandshake(t, clientConfig, serverConfig)
+	state, _, err = testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -448,7 +454,7 @@ func TestCrossVersionResume(t *testing.T) {
 	}
 
 	// The client session cache now contains a TLS 1.0 session.
-	state, _, err = testHandshake(t, clientConfig, serverConfig)
+	state, _, err = testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -458,7 +464,7 @@ func TestCrossVersionResume(t *testing.T) {
 
 	// Test that the server will decline to resume at a higher version.
 	clientConfig.MaxVersion = VersionTLS11
-	state, _, err = testHandshake(t, clientConfig, serverConfig)
+	state, _, err = testHandshake(clientConfig, serverConfig)
 	if err != nil {
 		t.Fatalf("handshake failed: %s", err)
 	}
@@ -582,7 +588,7 @@ func (test *serverTest) run(t *testing.T, write bool) {
 		}
 		serverConn = recordingConn
 	} else {
-		clientConn, serverConn = localPipe(t)
+		clientConn, serverConn = net.Pipe()
 	}
 	config := test.config
 	if config == nil {
@@ -835,7 +841,7 @@ func TestHandshakeServerSNIGetCertificate(t *testing.T) {
 	nameToCert := config.NameToCertificate
 	config.NameToCertificate = nil
 	config.GetCertificate = func(clientHello *ClientHelloInfo) (*Certificate, error) {
-		cert := nameToCert[clientHello.ServerName]
+		cert, _ := nameToCert[clientHello.ServerName]
 		return cert, nil
 	}
 	test := &serverTest{
@@ -913,7 +919,7 @@ func TestHandshakeServerEmptyCertificates(t *testing.T) {
 	testClientHelloFailure(t, serverConfig, clientHello, "no certificates")
 }
 
-// TestCipherSuiteCertPreferance ensures that we select an RSA ciphersuite with
+// TestCipherSuiteCertPreference ensures that we select an RSA ciphersuite with
 // an RSA certificate and an ECDSA ciphersuite with an ECDSA certificate.
 func TestCipherSuiteCertPreferenceECDSA(t *testing.T) {
 	config := testConfig.Clone()
@@ -990,6 +996,7 @@ func TestResumptionDisabled(t *testing.T) {
 func TestFallbackSCSV(t *testing.T) {
 	serverConfig := Config{
 		Certificates: testConfig.Certificates,
+		MinVersion:   VersionTLS10,
 	}
 	test := &serverTest{
 		name:   "FallbackSCSV",
@@ -1001,24 +1008,6 @@ func TestFallbackSCSV(t *testing.T) {
 	runServerTestTLS11(t, test)
 }
 
-func TestHandshakeServerExportKeyingMaterial(t *testing.T) {
-	test := &serverTest{
-		name:    "ExportKeyingMaterial",
-		command: []string{"openssl", "s_client"},
-		config:  testConfig.Clone(),
-		validate: func(state ConnectionState) error {
-			if km, err := state.ExportKeyingMaterial("test", nil, 42); err != nil {
-				return fmt.Errorf("ExportKeyingMaterial failed: %v", err)
-			} else if len(km) != 42 {
-				return fmt.Errorf("Got %d bytes from ExportKeyingMaterial, wanted %d", len(km), 42)
-			}
-			return nil
-		},
-	}
-	runServerTestTLS10(t, test)
-	runServerTestTLS12(t, test)
-}
-
 func benchmarkHandshakeServer(b *testing.B, cipherSuite uint16, curve CurveID, cert []byte, key crypto.PrivateKey) {
 	config := testConfig.Clone()
 	config.CipherSuites = []uint16{cipherSuite}
@@ -1028,7 +1017,7 @@ func benchmarkHandshakeServer(b *testing.B, cipherSuite uint16, curve CurveID, c
 	config.Certificates[0].PrivateKey = key
 	config.BuildNameToCertificate()
 
-	clientConn, serverConn := localPipe(b)
+	clientConn, serverConn := net.Pipe()
 	serverConn = &recordingConn{Conn: serverConn}
 	go func() {
 		client := Client(clientConn, testConfig)
@@ -1042,7 +1031,7 @@ func benchmarkHandshakeServer(b *testing.B, cipherSuite uint16, curve CurveID, c
 	flows := serverConn.(*recordingConn).flows
 
 	feeder := make(chan struct{})
-	clientConn, serverConn = localPipe(b)
+	clientConn, serverConn = net.Pipe()
 
 	go func() {
 		for range feeder {
@@ -1054,10 +1043,10 @@ func benchmarkHandshakeServer(b *testing.B, cipherSuite uint16, curve CurveID, c
 				ff := make([]byte, len(f))
 				n, err := io.ReadFull(clientConn, ff)
 				if err != nil {
-					b.Errorf("#%d: %s\nRead %d, wanted %d, got %x, wanted %x\n", i+1, err, n, len(ff), ff[:n], f)
+					b.Fatalf("#%d: %s\nRead %d, wanted %d, got %x, wanted %x\n", i+1, err, n, len(ff), ff[:n], f)
 				}
 				if !bytes.Equal(f, ff) {
-					b.Errorf("#%d: mismatch on read: got:%x want:%x", i+1, ff, f)
+					b.Fatalf("#%d: mismatch on read: got:%x want:%x", i+1, ff, f)
 				}
 			}
 		}
@@ -1219,7 +1208,7 @@ func TestSNIGivenOnFailure(t *testing.T) {
 	// Erase the server's cipher suites to ensure the handshake fails.
 	serverConfig.CipherSuites = nil
 
-	c, s := localPipe(t)
+	c, s := net.Pipe()
 	go func() {
 		cli := Client(c, testConfig)
 		cli.vers = clientHello.vers
@@ -1277,7 +1266,7 @@ var getConfigForClientTests = []struct {
 			config.MaxVersion = VersionTLS11
 			return config, nil
 		},
-		"version 301 when expecting version 302",
+		"protocol version not supported",
 		nil,
 	},
 	{
@@ -1349,7 +1338,7 @@ func TestGetConfigForClient(t *testing.T) {
 			configReturned = config
 			return config, err
 		}
-		c, s := localPipe(t)
+		c, s := net.Pipe()
 		done := make(chan error)
 
 		go func() {
@@ -1424,21 +1413,3 @@ var testECDSAPrivateKey = &ecdsa.PrivateKey{
 }
 
 var testP256PrivateKey, _ = x509.ParseECPrivateKey(fromHex("30770201010420012f3b52bc54c36ba3577ad45034e2e8efe1e6999851284cb848725cfe029991a00a06082a8648ce3d030107a14403420004c02c61c9b16283bbcc14956d886d79b358aa614596975f78cece787146abf74c2d5dc578c0992b4f3c631373479ebf3892efe53d21c4f4f1cc9a11c3536b7f75"))
-
-func TestCloseServerConnectionOnIdleClient(t *testing.T) {
-	clientConn, serverConn := localPipe(t)
-	server := Server(serverConn, testConfig.Clone())
-	go func() {
-		clientConn.Write([]byte{'0'})
-		server.Close()
-	}()
-	server.SetReadDeadline(time.Now().Add(time.Second))
-	err := server.Handshake()
-	if err != nil {
-		if err, ok := err.(net.Error); ok && err.Timeout() {
-			t.Errorf("Expected a closed network connection error but got '%s'", err.Error())
-		}
-	} else {
-		t.Errorf("Error expected, but no error returned")
-	}
-}
