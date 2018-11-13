@@ -322,6 +322,10 @@ type ClientHelloInfo struct {
 	// place it on top to prevent confilict for tls-tris
 	Raw []byte
 
+	// Extensions lists the Extensions supported by the client (e.g.
+	// ServerName).
+	Extensions []uint16
+
 	// CipherSuites lists the CipherSuites supported by the client (e.g.
 	// TLS_AES_128_GCM_SHA256, TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256).
 	CipherSuites []uint16

@@ -85,6 +85,7 @@ type clientHelloMsg struct {
 	secureRenegotiation              []byte
 	alpnProtocols                    []string
 	scts                             bool
+	extensions                       []uint16
 	supportedVersions                []uint16
 	cookie                           []byte
 	keyShares                        []keyShare
@@ -397,6 +398,11 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
 			!extensions.ReadUint16LengthPrefixed(&extData) {
 			return false
 		}
+
+		if m.extensions == nil {
+			m.extensions = make([]uint16, 0)
+		}
+		m.extensions = append(m.extensions, extension)
 
 		switch extension {
 		case extensionServerName:
