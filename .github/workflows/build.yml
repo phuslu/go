@@ -2,7 +2,7 @@ name: go
 
 on:
   schedule:
-    - cron: '50 10 * * *'
+    - cron: '0 15 * * *'
 
 jobs:
   go:
