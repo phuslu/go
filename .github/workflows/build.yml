@@ -1,0 +1,51 @@
+name: go
+
+on:
+  schedule:
+    - cron: '50 10 * * *'
+
+jobs:
+  go:
+    runs-on: ubuntu-16.04
+    strategy:
+      matrix:
+        branch: [master, release-branch.go1.20, release-branch.go1.19, release-branch.go1.18]
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          check-latest: true
+      - name: Setup
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt install -yq golang pigz bzip2
+      - name: Clone
+        run: |
+          git clone -b ${{ matrix.branch }} https://go.googlesource.com/go
+          sudo mv go /opt/
+      - name: Patch
+        run: |
+          wget https://github.com/phuslu/go/raw/master/01-dot-goenv.patch
+          patch -p1 -d /opt/go < 01-dot-goenv.patch
+      - name: Make
+        run: |
+          cd /opt/go/src
+          cgo_enabled=$(test "${{ matrix.goos }}_${{ matrix.goarch }}" = "linux_amd64" && echo 1 || echo 0)
+          env CGO_ENABLED=${cgo_enabled} GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} ./make.bash
+      - name: Tarball
+        run: |
+          cd /opt/go/bin
+          test -d ${{ matrix.goos }}_${{ matrix.goarch }} && rm -f go gofmt && mv -f ${{ matrix.goos }}_${{ matrix.goarch }}/* . && rmdir ${{ matrix.goos }}_${{ matrix.goarch }}
+          cd /opt
+          gover=$(echo ${{ matrix.branch }} | grep -oP 'go1.+' || echo gotip)
+          tar -cf /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar go
+          pigz -9 /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar
+      - name: Release
+        run: |
+          curl -L https://github.com/github-release/github-release/releases/download/v0.10.0/linux-amd64-github-release.bz2 | bzip2 -d >github-release
+          chmod +x github-release
+          gover=$(echo ${{ matrix.branch }} | grep -oP 'go1.+' || echo gotip)
+          ./github-release upload --replace --user phuslu --repo go --tag v0.0.0 --name ${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz --file /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GOTIP_TOKEN }}

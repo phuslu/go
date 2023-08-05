@@ -1,0 +1,62 @@
+commit 33fda521f72037473a9153266a28e2dedc510f02
+Author: phus.lu <phus.lu@gmail.com>
+Date:   2022-06-17 23:49:02 +0800
+
+    go/build: add .goenv support
+
+diff --git a/src/go/build/build.go b/src/go/build/build.go
+index 420873c256..c038380bc9 100644
+--- a/src/go/build/build.go
++++ b/src/go/build/build.go
+@@ -351,6 +351,51 @@ func defaultContext() Context {
+ 		c.CgoEnabled = false
+ 	}
+ 
++	if os.Getenv("GOENV_ENABLED") == "1" {
++		dir, _ := os.Getwd()
++		var lines []string
++		for i := 0; i < 6; i++ {
++			if data, _ := os.ReadFile(filepath.Join(dir, ".goenv")); len(data) != 0 {
++				lines = strings.Split(string(data), "\n")
++				break
++			}
++			if dir = filepath.Dir(dir); dir == "/" {
++				break
++			}
++		}
++		for _, line := range lines {
++			parts := strings.SplitN(line, "=", 2)
++			if len(parts) == 1 || strings.HasPrefix(strings.TrimSpace(line), "#") {
++				continue
++			}
++			key := strings.TrimSpace(parts[0])
++			value := strings.TrimSpace(parts[1])
++			os.Setenv(key, value)
++			switch key {
++			case "CGO_ENABLED":
++				switch value {
++				case "1":
++					c.CgoEnabled = true
++				case "0":
++					c.CgoEnabled = false
++				}
++			case "GOOS":
++				c.GOOS = value
++			case "GOARCH":
++				c.GOARCH = value
++			case "GOPATH":
++				c.GOPATH = value
++			case "GOROOT":
++				c.GOROOT = value
++			case "http_proxy":
++				os.Setenv("http_proxy", value)
++				os.Setenv("https_proxy", value)
++				os.Setenv("HTTP_PROXY", value)
++				os.Setenv("HTTPS_PROXY", value)
++			}
++		}
++	}
++
+ 	return c
+ }
+ 
