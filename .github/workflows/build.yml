@@ -2,14 +2,14 @@ name: go
 
 on:
   schedule:
-    - cron: '10 11 * * *'
+    - cron: '05 16 * * *'
 
 jobs:
   go:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        branch: [master, release-branch.go1.20, release-branch.go1.19]
+        branch: [master, release-branch.go1.20, release-branch.go1.19, release-branch.go1.18]
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
     steps:
