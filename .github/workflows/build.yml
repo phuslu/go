@@ -2,11 +2,11 @@ name: go
 
 on:
   schedule:
-    - cron: '30 7 * * *'
+    - cron: '10 11 * * *'
 
 jobs:
   go:
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         branch: [master, release-branch.go1.20, release-branch.go1.19]
