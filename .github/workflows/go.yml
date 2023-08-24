@@ -22,7 +22,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt install -yq golang pigz bzip2
       - name: Clone
         run: |
-          git clone -b ${{ matrix.branch }} https://go.googlesource.com/go
+          git clone -b ${{ matrix.branch }} --single-branch https://go.googlesource.com/go
           sudo mv go /opt/
       - name: Patch
         run: |
