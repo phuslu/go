@@ -5,19 +5,22 @@ Date:   2022-06-17 23:49:02 +0800
     go/build: add .goenv support
 
 diff --git a/src/go/build/build.go b/src/go/build/build.go
-index dfb37b8f34..4bb469f152 100644
+index dd6cdc903a..735d93c27d 100644
 --- a/src/go/build/build.go
 +++ b/src/go/build/build.go
-@@ -356,6 +356,53 @@ func defaultContext() Context {
+@@ -352,6 +352,54 @@ func defaultContext() Context {
  		c.CgoEnabled = false
  	}
  
 +	if os.Getenv("GOENV_ENABLED") == "1" {
 +		dir, _ := os.Getwd()
 +		var lines []string
-+		for i := 0; i < 6; i++ {
++		for i := 0; i < 9; i++ {
 +			if data, _ := os.ReadFile(filepath.Join(dir, ".goenv")); len(data) != 0 {
 +				lines = strings.Split(string(data), "\n")
++				break
++			}
++			if fi, _ := os.Stat(filepath.Join(dir, ".git")); fi != nil && fi.IsDir() {
 +				break
 +			}
 +			if dir = filepath.Dir(dir); dir == "/" {
@@ -48,8 +51,6 @@ index dfb37b8f34..4bb469f152 100644
 +				c.GOPATH = value
 +			case "GOROOT":
 +				c.GOROOT = value
-+			case "GOFLAGS":
-+				os.Setenv("GOFLAGS", value)
 +			case "http_proxy":
 +				os.Setenv("http_proxy", value)
 +				os.Setenv("https_proxy", value)
