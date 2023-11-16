@@ -12,7 +12,7 @@ index dd6cdc903a..735d93c27d 100644
  		c.CgoEnabled = false
  	}
  
-+	if os.Getenv("GOENV_ENABLED") == "1" {
++	if os.Getenv("GOENV_ENABLED") != "0" {
 +		dir, _ := os.Getwd()
 +		var lines []string
 +		for i := 0; i < 9; i++ {
