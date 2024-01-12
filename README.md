@@ -32,5 +32,3 @@
 - [go1.19.darwin-amd64.tar.gz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.19.darwin-amd64.tar.gz)
 - [go1.19.darwin-arm64.tar.gz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.19.darwin-arm64.tar.gz)
 
-### gocf
-- [gocf.linux-amd64.tar.gz](https://github.com/phuslu/go/releases/download/v0.0.0/gocf.linux-amd64.tar.gz)
