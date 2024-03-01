@@ -2,7 +2,7 @@ commit 33fda521f72037473a9153266a28e2dedc510f02
 Author: phus.lu <phus.lu@gmail.com>
 Date:   2022-06-17 23:49:02 +0800
 
-    go/build: add .goenv support
+    go/build: add go.env support
 
 diff --git a/src/go/build/build.go b/src/go/build/build.go
 index dd6cdc903a..735d93c27d 100644
@@ -16,7 +16,7 @@ index dd6cdc903a..735d93c27d 100644
 +		dir, _ := os.Getwd()
 +		var lines []string
 +		for i := 0; i < 9; i++ {
-+			if data, _ := os.ReadFile(filepath.Join(dir, ".goenv")); len(data) != 0 {
++			if data, _ := os.ReadFile(filepath.Join(dir, "go.env")); len(data) != 0 {
 +				lines = strings.Split(string(data), "\n")
 +				break
 +			}
