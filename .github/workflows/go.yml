@@ -27,12 +27,16 @@ jobs:
           sudo mv go /opt/
       - name: Patch
         run: |
-          wget https://github.com/phuslu/go/raw/master/01-dot-goenv.patch
-          patch -p1 -d /opt/go < 01-dot-goenv.patch
+          wget https://github.com/phuslu/go/raw/master/01-goenv.patch
+          patch -p1 -d /opt/go < 01-goenv.patch
       - name: Make
         run: |
           cd /opt/go/src
-          cgo_enabled=$(test "${{ matrix.goos }}_${{ matrix.goarch }}" = "linux_amd64" && echo 1 || echo 0)
+          osarch=${{ matrix.goos }}_${{ matrix.goarch }}
+          cgo_enabled=0
+          if [ "$osarch" = "linux_amd64" ] || [ "$osarch" = "linux_arm64" ]; then
+             cgo_enabled=1
+          fi
           env CGO_ENABLED=${cgo_enabled} GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} ./make.bash
       - name: Tarball
         run: |
