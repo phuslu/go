@@ -34,7 +34,7 @@ jobs:
           cd /opt/go/src
           osarch=${{ matrix.goos }}_${{ matrix.goarch }}
           cgo_enabled=0
-          if [ "$osarch" = "linux_amd64" ] || [ "$osarch" = "linux_arm64" ]; then
+          if [ "$osarch" = "linux_amd64" ] || [ "$osarch" = "linux_amd64" ]; then
              cgo_enabled=1
           fi
           env CGO_ENABLED=${cgo_enabled} GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} ./make.bash
