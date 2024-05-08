@@ -24,7 +24,7 @@ jobs:
       - name: Setup
         run: |
           sudo DEBIAN_FRONTEND=noninteractive apt update -yq
-          sudo DEBIAN_FRONTEND=noninteractive apt install -yq golang pigz bzip2
+          sudo DEBIAN_FRONTEND=noninteractive apt install -yq bzip2
       - name: Clone
         run: |
           git clone -b ${{ matrix.branch }} --single-branch https://github.com/golang/go
@@ -51,13 +51,12 @@ jobs:
           test -d ${{ matrix.goos }}_${{ matrix.goarch }} && rm -f go gofmt && mv -f ${{ matrix.goos }}_${{ matrix.goarch }}/* . && rmdir ${{ matrix.goos }}_${{ matrix.goarch }}
           cd /opt
           gover=$(echo ${{ matrix.branch }} | grep -oP 'go1.+' || echo gotip)
-          tar -cf /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar go
-          pigz -9 /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar
+          tar c go | xz -9 -T 4 >/tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
       - name: Release
         run: |
           curl -L https://github.com/github-release/github-release/releases/download/v0.10.0/linux-amd64-github-release.bz2 | bzip2 -d >github-release
           chmod +x github-release
           gover=$(echo ${{ matrix.branch }} | grep -oP 'go1.+' || echo gotip)
-          ./github-release upload --replace --user phuslu --repo go --tag v0.0.0 --name ${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz --file /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          ./github-release upload --replace --user phuslu --repo go --tag v0.0.0 --name ${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz --file /tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
         env:
           GITHUB_TOKEN: ${{ secrets.GOTIP_TOKEN }}
