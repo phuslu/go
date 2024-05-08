@@ -3,6 +3,9 @@ name: go
 on:
   schedule:
     - cron: '05 16 * * *'
+  push:
+    branches:
+      - master
 
 jobs:
   go:
@@ -17,6 +20,7 @@ jobs:
         with:
           go-version: '1.21'
           check-latest: true
+      - uses: actions/checkout@v4
       - name: Setup
         run: |
           sudo DEBIAN_FRONTEND=noninteractive apt update -yq
@@ -25,10 +29,13 @@ jobs:
         run: |
           git clone -b ${{ matrix.branch }} --single-branch https://github.com/golang/go
           sudo mv go /opt/
-      - name: Patch
+      - name: Patch 01-goenv.patch
         run: |
-          wget https://github.com/phuslu/go/raw/master/01-goenv.patch
           patch -p1 -d /opt/go < 01-goenv.patch
+      - name: Patch 02-http2date.patch
+        if: matrix.branch == 'master' || matrix.branch == 'release-branch.go1.22'
+        run: |
+          patch -p1 -d /opt/go < 02-http2date.patch
       - name: Make
         run: |
           cd /opt/go/src

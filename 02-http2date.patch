@@ -1,0 +1,13 @@
+diff --git a/src/net/http/h2_bundle.go b/src/net/http/h2_bundle.go
+index ac41144d5b..2d6b79e419 100644
+--- a/src/net/http/h2_bundle.go
++++ b/src/net/http/h2_bundle.go
+@@ -6422,7 +6422,7 @@ func (rws *http2responseWriterState) writeChunk(p []byte) (n int, err error) {
+ 		var date string
+ 		if _, ok := rws.snapHeader["Date"]; !ok {
+ 			// TODO(bradfitz): be faster here, like net/http? measure.
+-			date = time.Now().UTC().Format(TimeFormat)
++			date = string(appendTime(make([]byte, 0, len(TimeFormat)), time.Now().UTC()))
+ 		}
+ 
+ 		for _, v := range rws.snapHeader["Trailer"] {
