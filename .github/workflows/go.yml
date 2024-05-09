@@ -36,6 +36,10 @@ jobs:
         if: matrix.branch == 'master' || matrix.branch == 'release-branch.go1.22'
         run: |
           patch -p1 -d /opt/go < 02-http2date.patch
+      - name: Patch 03-tlsclienthello.patch
+        if: matrix.branch == 'release-branch.go1.22'
+        run: |
+          patch -p1 -d /opt/go < 03-tlsclienthello.patch
       - name: Make
         run: |
           cd /opt/go/src

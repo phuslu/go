@@ -1,0 +1,55 @@
+diff --git a/src/crypto/tls/common.go b/src/crypto/tls/common.go
+index 849e8b0a20..7b4cc62bfa 100644
+--- a/src/crypto/tls/common.go
++++ b/src/crypto/tls/common.go
+@@ -443,6 +443,9 @@ type ClientHelloInfo struct {
+ 	// might be rejected if used.
+ 	SupportedVersions []uint16
+ 
++	Extensions []uint16
++	Raw        []byte
++
+ 	// Conn is the underlying net.Conn for the connection. Do not read
+ 	// from, or write to, this connection; that will cause the TLS
+ 	// connection to fail.
+diff --git a/src/crypto/tls/handshake_messages.go b/src/crypto/tls/handshake_messages.go
+index a86055a060..153291bf78 100644
+--- a/src/crypto/tls/handshake_messages.go
++++ b/src/crypto/tls/handshake_messages.go
+@@ -76,6 +76,7 @@ type clientHelloMsg struct {
+ 	compressionMethods               []uint8
+ 	serverName                       string
+ 	ocspStapling                     bool
++	extensions                       []uint16
+ 	supportedCurves                  []CurveID
+ 	supportedPoints                  []uint8
+ 	ticketSupported                  bool
+@@ -402,6 +403,7 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
+ 		return true
+ 	}
+ 
++	m.extensions = []uint16{}
+ 	var extensions cryptobyte.String
+ 	if !s.ReadUint16LengthPrefixed(&extensions) || !s.Empty() {
+ 		return false
+@@ -420,6 +422,7 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
+ 			return false
+ 		}
+ 		seenExts[extension] = true
++		m.extensions = append(m.extensions, extension)
+ 
+ 		switch extension {
+ 		case extensionServerName:
+diff --git a/src/crypto/tls/handshake_server.go b/src/crypto/tls/handshake_server.go
+index 8129e9c616..e18409f02b 100644
+--- a/src/crypto/tls/handshake_server.go
++++ b/src/crypto/tls/handshake_server.go
+@@ -955,6 +955,8 @@ func clientHelloInfo(ctx context.Context, c *Conn, clientHello *clientHelloMsg)
+ 		SignatureSchemes:  clientHello.supportedSignatureAlgorithms,
+ 		SupportedProtos:   clientHello.alpnProtocols,
+ 		SupportedVersions: supportedVersions,
++		Extensions:        clientHello.extensions,
++		Raw:               clientHello.raw,
+ 		Conn:              c.conn,
+ 		config:            c.config,
+ 		ctx:               ctx,
