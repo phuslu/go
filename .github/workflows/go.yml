@@ -33,7 +33,7 @@ jobs:
         run: |
           patch -p1 -d /opt/go < 01-goenv.patch
       - name: Patch 02-http2date.patch
-        if: matrix.branch == 'master' || matrix.branch == 'release-branch.go1.22'
+        if: matrix.branch == 'master'
         run: |
           patch -p1 -d /opt/go < 02-http2date.patch
       - name: Patch 03-tlsclienthello.patch

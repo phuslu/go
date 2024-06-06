@@ -6,8 +6,8 @@ index ac41144d5b..2d6b79e419 100644
  		var date string
  		if _, ok := rws.snapHeader["Date"]; !ok {
  			// TODO(bradfitz): be faster here, like net/http? measure.
--			date = time.Now().UTC().Format(TimeFormat)
-+			date = string(appendTime(make([]byte, 0, len(TimeFormat)), time.Now().UTC()))
+-			date = rws.conn.srv.now().UTC().Format(TimeFormat)
++			date = string(appendTime(make([]byte, 0, len(TimeFormat)), rws.conn.srv.now().UTC()))
  		}
  
  		for _, v := range rws.snapHeader["Trailer"] {
