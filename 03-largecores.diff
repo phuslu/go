@@ -1,0 +1,47 @@
+From c39760ad9639886c70563c7d0384dad9e52fc0c6 Mon Sep 17 00:00:00 2001
+From: Ian Lance Taylor <iant@golang.org>
+Date: Wed, 14 Feb 2024 17:54:00 -0800
+Subject: [PATCH] runtime: only poll network from one P at a time in findRunnable
+
+For #65064
+
+Change-Id: Ifecd7e332d2cf251750752743befeda4ed396f33
+---
+
+diff --git a/src/runtime/proc.go b/src/runtime/proc.go
+index e9873e5..9226fca 100644
+--- a/src/runtime/proc.go
++++ b/src/runtime/proc.go
+@@ -3358,8 +3358,12 @@
+ 	// blocked thread (e.g. it has already returned from netpoll, but does
+ 	// not set lastpoll yet), this thread will do blocking netpoll below
+ 	// anyway.
+-	if netpollinited() && netpollAnyWaiters() && sched.lastpoll.Load() != 0 {
+-		if list, delta := netpoll(0); !list.empty() { // non-blocking
++	// We only poll from one thread at a time to avoid kernel contention
++	// on machines with many cores.
++	if netpollinited() && netpollAnyWaiters() && sched.lastpoll.Load() != 0 && sched.pollingNet.Swap(1) == 0 {
++		list, delta := netpoll(0)
++		sched.pollingNet.Store(0)
++		if !list.empty() { // non-blocking
+ 			gp := list.pop()
+ 			injectglist(&list)
+ 			netpollAdjustWaiters(delta)
+diff --git a/src/runtime/runtime2.go b/src/runtime/runtime2.go
+index 7280643..10af6b9 100644
+--- a/src/runtime/runtime2.go
++++ b/src/runtime/runtime2.go
+@@ -756,9 +756,10 @@
+ }
+ 
+ type schedt struct {
+-	goidgen   atomic.Uint64
+-	lastpoll  atomic.Int64 // time of last network poll, 0 if currently polling
+-	pollUntil atomic.Int64 // time to which current poll is sleeping
++	goidgen    atomic.Uint64
++	lastpoll   atomic.Int64 // time of last network poll, 0 if currently polling
++	pollUntil  atomic.Int64 // time to which current poll is sleeping
++	pollingNet atomic.Int32 // 1 if some P doing non-blocking network poll
+ 
+ 	lock mutex
+ 
