@@ -9,7 +9,7 @@ on:
 
 jobs:
   go:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         branch: [master, release-branch.go1.24, release-branch.go1.23, release-branch.go1.22, release-branch.go1.21]
