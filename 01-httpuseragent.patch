@@ -1,0 +1,37 @@
+diff --git a/src/net/http/request.go b/src/net/http/request.go
+index 8a765c3442..1b36e21aa2 100644
+--- a/src/net/http/request.go
++++ b/src/net/http/request.go
+@@ -542,7 +542,7 @@ func valueOrDefault(value, def string) string {
+ // It was changed at the time of Go 1.1 release because the former User-Agent
+ // had ended up blocked by some intrusion detection systems.
+ // See https://codereview.appspot.com/7532043.
+-const defaultUserAgent = "Go-http-client/1.1"
++// const defaultUserAgent = "Go-http-client/1.1"
+ 
+ // Write writes an HTTP/1.1 request, which is the header and body, in wire format.
+ // This method consults the following fields of the request:
+diff --git a/src/net/http/request_ua.go b/src/net/http/request_ua.go
+new file mode 100644
+index 0000000000..b9a1457d8e
+--- /dev/null
++++ b/src/net/http/request_ua.go
+@@ -0,0 +1,18 @@
++// Copyright 2009 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// HTTP Request reading and parsing.
++
++package http
++
++import (
++	"os"
++)
++
++var defaultUserAgent = func() string {
++	if s := os.Getenv("GO_HTTP_USER_AGENT"); s != "" {
++		return s
++	}
++	return "Go-http-client/1.1"
++}()

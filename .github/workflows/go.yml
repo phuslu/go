@@ -29,9 +29,10 @@ jobs:
         run: |
           git clone -b ${{ matrix.branch }} --single-branch https://github.com/golang/go
           sudo mv go /opt/
-      - name: Patch 01-goenv.patch
+      - name: Patch 01-goenv.patch and 01-httpuseragent.patch
         run: |
           patch -p1 -d /opt/go < 01-goenv.patch
+          patch -p1 -d /opt/go < 01-httpuseragent.patch
       - name: Patch 02-http2date.patch
         if: matrix.branch == 'master'
         run: |
