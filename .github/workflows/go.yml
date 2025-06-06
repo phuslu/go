@@ -33,6 +33,10 @@ jobs:
         run: |
           patch -p1 -d /opt/go < 01-goenv.patch
           patch -p1 -d /opt/go < 10-httpuseragent.patch
+      - name: Patch 02-checklinkname.patch
+        if: ${{ matrix.branch == 'master' || matrix.branch == 'release-branch.go1.24' }}
+        run: |
+          patch -p1 -d /opt/go < 02-checklinkname.patch
       - name: Patch 10-http2date.patch
         if: matrix.branch == 'master'
         run: |

@@ -1,0 +1,15 @@
+diff --git a/src/cmd/link/internal/ld/main.go b/src/cmd/link/internal/ld/main.go
+index 7614b6d194..3fe5e6c3c1 100644
+--- a/src/cmd/link/internal/ld/main.go
++++ b/src/cmd/link/internal/ld/main.go
+@@ -207,6 +207,10 @@ func Main(arch *sys.Arch, theArch Arch) {
+ 	objabi.Flagparse(usage)
+ 	counter.CountFlags("link/flag:", *flag.CommandLine)
+ 
++	if strings.Contains(os.Getenv("LDFLAGS"), "-checklinkname=0") {
++		*flagCheckLinkname = false
++	}
++
+ 	if ctxt.Debugvlog > 0 {
+ 		// dump symbol info on crash
+ 		defer func() { ctxt.loader.Dump() }()
