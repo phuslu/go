@@ -1,0 +1,225 @@
+commit 4bdebd90d03f69b3fa2e44a477a1c2bb612311fb
+Author: phuslu <phus.lu@gmail.com>
+Date:   2025-07-05 01:27:34 +0800
+
+    ktls patch
+
+diff --git a/src/crypto/tls/cipher_suites.go b/src/crypto/tls/cipher_suites.go
+index 01d6568828..29970ab4b2 100644
+--- a/src/crypto/tls/cipher_suites.go
++++ b/src/crypto/tls/cipher_suites.go
+@@ -458,6 +458,7 @@ const (
+ type prefixNonceAEAD struct {
+ 	// nonce contains the fixed part of the nonce in the first four bytes.
+ 	nonce [aeadNonceLength]byte
++	key   []byte
+ 	aead  cipher.AEAD
+ }
+ 
+@@ -479,6 +480,7 @@ func (f *prefixNonceAEAD) Open(out, nonce, ciphertext, additionalData []byte) ([
+ // before each call.
+ type xorNonceAEAD struct {
+ 	nonceMask [aeadNonceLength]byte
++	key       []byte
+ 	aead      cipher.AEAD
+ }
+ 
+@@ -529,7 +531,7 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
+ 		panic(err)
+ 	}
+ 
+-	ret := &prefixNonceAEAD{aead: aead}
++	ret := &prefixNonceAEAD{aead: aead, key: key}
+ 	copy(ret.nonce[:], noncePrefix)
+ 	return ret
+ }
+@@ -563,7 +565,7 @@ func aeadAESGCMTLS13(key, nonceMask []byte) aead {
+ 		panic(err)
+ 	}
+ 
+-	ret := &xorNonceAEAD{aead: aead}
++	ret := &xorNonceAEAD{aead: aead, key: key}
+ 	copy(ret.nonceMask[:], nonceMask)
+ 	return ret
+ }
+@@ -577,7 +579,7 @@ func aeadChaCha20Poly1305(key, nonceMask []byte) aead {
+ 		panic(err)
+ 	}
+ 
+-	ret := &xorNonceAEAD{aead: aead}
++	ret := &xorNonceAEAD{aead: aead, key: key}
+ 	copy(ret.nonceMask[:], nonceMask)
+ 	return ret
+ }
+diff --git a/src/crypto/tls/conn.go b/src/crypto/tls/conn.go
+index bdbc2bde41..a421e30192 100644
+--- a/src/crypto/tls/conn.go
++++ b/src/crypto/tls/conn.go
+@@ -551,6 +551,16 @@ func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, err
+ 			c.SetIV(explicitNonce)
+ 		}
+ 		c.CryptBlocks(dst, dst)
++	case kTLSCipher:
++		if recordType(record[0]) == recordTypeAlert {
++			println("kTLS: dropped alert on the floor")
++			record = record[:recordHeaderLen]
++		} else if recordType(record[0]) != recordTypeApplicationData {
++			panic("kTLS: tried to send unsupported data type")
++		}
++		record = record[recordHeaderLen:]
++		println("kTLS: sent bytes of plaintext to the kernel", len(record))
++		return record, nil
+ 	default:
+ 		panic("unknown cipher type")
+ 	}
+@@ -917,6 +927,8 @@ func (c *Conn) maxPayloadSizeForWrite(typ recordType) int {
+ 			// The MAC is appended before padding so affects the
+ 			// payload size directly.
+ 			payloadBytes -= c.out.mac.Size()
++		case kTLSCipher:
++			payloadBytes -= kTLSOverhead
+ 		default:
+ 			panic("unknown cipher type")
+ 		}
+diff --git a/src/crypto/tls/handshake_server.go b/src/crypto/tls/handshake_server.go
+index 7c75977ad3..5771707ce7 100644
+--- a/src/crypto/tls/handshake_server.go
++++ b/src/crypto/tls/handshake_server.go
+@@ -125,6 +125,12 @@ func (hs *serverHandshakeState) handshake() error {
+ 		}
+ 	}
+ 
++	if tlskernel {
++		if err := c.enableApplicationDataEncryption(); err != nil {
++			return err
++		}
++	}
++
+ 	c.ekm = ekmFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.clientHello.random, hs.hello.random)
+ 	c.isHandshakeComplete.Store(true)
+ 
+diff --git a/src/crypto/tls/ktls.go b/src/crypto/tls/ktls.go
+new file mode 100644
+index 0000000000..39e3d59c22
+--- /dev/null
++++ b/src/crypto/tls/ktls.go
+@@ -0,0 +1,119 @@
++package tls
++
++import (
++	"net"
++	"os"
++	"syscall"
++	"unsafe"
++	"strings"
++)
++
++var tlskernel = strings.Contains(os.Getenv("GODEBUG"), "tlskernel=1")
++
++func (c *Conn) enableApplicationDataEncryption() error {
++	tcpConn, ok := c.conn.(*net.TCPConn)
++	if !ok {
++		println("kTLS: unsupported connection type")
++		return nil
++	}
++
++	if err := kTLSEnable(tcpConn, c.out.cipher, c.out.seq[:]); err != nil {
++		println("kTLS: error enabling:", err)
++		return err
++	}
++
++	c.out.cipher = kTLSCipher{}
++
++	println("kTLS: enabled")
++	return nil
++}
++
++// https://github.com/torvalds/linux/blob/v6.8/Documentation/networking/tls.rst
++
++const (
++	TCP_ULP = 31
++	SOL_TLS = 282
++	TLS_TX  = 1
++
++	kTLS_CIPHER_AES_GCM_128              = 51
++	kTLS_CIPHER_AES_GCM_128_IV_SIZE      = 8
++	kTLS_CIPHER_AES_GCM_128_KEY_SIZE     = 16
++	kTLS_CIPHER_AES_GCM_128_SALT_SIZE    = 4
++	kTLS_CIPHER_AES_GCM_128_TAG_SIZE     = 16
++	kTLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE = 8
++
++	kTLSOverhead = 16
++)
++
++/* From linux/tls.h
++struct tls_crypto_info {
++	unsigned short version;
++	unsigned short cipher_type;
++};
++
++struct tls12_crypto_info_aes_gcm_128 {
++	struct tls_crypto_info info;
++	unsigned char iv[TLS_CIPHER_AES_GCM_128_IV_SIZE];
++	unsigned char key[TLS_CIPHER_AES_GCM_128_KEY_SIZE];
++	unsigned char salt[TLS_CIPHER_AES_GCM_128_SALT_SIZE];
++	unsigned char rec_seq[TLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE];
++}; */
++
++type kTLSCryptoInfo struct {
++	version    uint16
++	cipherType uint16
++	iv         [kTLS_CIPHER_AES_GCM_128_IV_SIZE]byte
++	key        [kTLS_CIPHER_AES_GCM_128_KEY_SIZE]byte
++	salt       [kTLS_CIPHER_AES_GCM_128_SALT_SIZE]byte
++	recSeq     [kTLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE]byte
++}
++
++const kTLSCryptoInfoSize = 2 + 2 + kTLS_CIPHER_AES_GCM_128_IV_SIZE + kTLS_CIPHER_AES_GCM_128_KEY_SIZE +
++	kTLS_CIPHER_AES_GCM_128_SALT_SIZE + kTLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE
++
++// kTLSCipher is a placeholder to tell the record layer to skip wrapping.
++type kTLSCipher struct{}
++
++func kTLSEnable(c *net.TCPConn, cipher any, seq []byte) error {
++	var cryptoInfo kTLSCryptoInfo
++
++	// https://github.com/insanum/ktls_test/blob/master/tls_server.c#L112-L159
++
++	switch aead := cipher.(type) {
++	case *xorNonceAEAD:
++		cryptoInfo.version = VersionTLS13
++		cryptoInfo.cipherType = kTLS_CIPHER_AES_GCM_128
++		copy(cryptoInfo.salt[:], aead.nonceMask[:4])
++		copy(cryptoInfo.key[:], aead.key)
++		copy(cryptoInfo.iv[:], aead.nonceMask[4:])
++		copy(cryptoInfo.recSeq[:], seq)
++	case *prefixNonceAEAD:
++		cryptoInfo.version = VersionTLS12
++		cryptoInfo.cipherType = kTLS_CIPHER_AES_GCM_128
++		copy(cryptoInfo.salt[:], aead.nonce[:4])
++		copy(cryptoInfo.key[:], aead.key)
++		copy(cryptoInfo.iv[:], seq)
++		copy(cryptoInfo.recSeq[:], seq)
++	}
++
++	// Assert padding isn't introduced by alignment requirements.
++	if unsafe.Sizeof(cryptoInfo) != kTLSCryptoInfoSize {
++		panic("kTLS: wrong cryptoInfo size")
++	}
++
++	rwc, err := c.SyscallConn()
++	if err != nil {
++		return err
++	}
++	return rwc.Control(func(fd uintptr) {
++		err := syscall.SetsockoptString(int(fd), syscall.SOL_TCP, TCP_ULP, "tls")
++		if err != nil {
++			println("kTLS: setsockopt(SOL_TCP, TCP_ULP) failed:", err)
++		}
++		err = syscall.SetsockoptString(int(fd), SOL_TLS, TLS_TX,
++			string((*[kTLSCryptoInfoSize]byte)(unsafe.Pointer(&cryptoInfo))[:]))
++		if err != nil {
++			println("kTLS: setsockopt(SOL_TLS, TLS_TX) failed:", err)
++		}
++	})
++}
