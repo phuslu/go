@@ -41,6 +41,13 @@ jobs:
         if: matrix.branch == 'master'
         run: |
           patch -p1 -d /opt/go < 10-http2date.patch
+      - name: Commit
+        run: |
+          cd /opt/go/src
+          git config user.name phuslu
+          git config user.email phus.lu@gmail.com
+          git add -A .
+          git commit -m "apply phuslu/go patches"
       - name: Make
         run: |
           cd /opt/go/src
