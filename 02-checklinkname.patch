@@ -6,7 +6,7 @@ index 7614b6d194..3fe5e6c3c1 100644
  	objabi.Flagparse(usage)
  	counter.CountFlags("link/flag:", *flag.CommandLine)
  
-+	if strings.Contains(os.Getenv("LDFLAGS"), "-checklinkname=0") {
++	if strings.Contains(os.Getenv("GOLDFLAGS"), "-checklinkname=0") {
 +		*flagCheckLinkname = false
 +	}
 +

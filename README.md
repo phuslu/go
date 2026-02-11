@@ -8,6 +8,14 @@
 - [gotip.darwin-amd64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/gotip.darwin-amd64.tar.xz)
 - [gotip.darwin-arm64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/gotip.darwin-arm64.tar.xz)
 
+### go1.26
+- [go1.26.linux-amd64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.26.linux-amd64.tar.xz)
+- [go1.26.linux-arm64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.26.linux-arm64.tar.xz)
+- [go1.26.windows-amd64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.26.windows-amd64.tar.xz)
+- [go1.26.windows-arm64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.26.windows-arm64.tar.xz)
+- [go1.26.darwin-amd64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.26.darwin-amd64.tar.xz)
+- [go1.26.darwin-arm64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.26.darwin-arm64.tar.xz)
+
 ### go1.25
 - [go1.25.linux-amd64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.25.linux-amd64.tar.xz)
 - [go1.25.linux-arm64.tar.xz](https://github.com/phuslu/go/releases/download/v0.0.0/go1.25.linux-arm64.tar.xz)

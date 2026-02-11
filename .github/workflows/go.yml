@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        branch: [master, release-branch.go1.25, release-branch.go1.24, release-branch.go1.23, release-branch.go1.22]
+        branch: [master, release-branch.go1.26, release-branch.go1.25, release-branch.go1.24]
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
     steps:
@@ -34,13 +34,9 @@ jobs:
           patch -p1 -d /opt/go < 01-goenv.patch
           patch -p1 -d /opt/go < 10-httpuseragent.patch
       - name: Patch 02-checklinkname.patch
-        if: ${{ matrix.branch == 'master' || matrix.branch == 'release-branch.go1.25' || matrix.branch == 'release-branch.go1.24' }}
+        if: ${{ matrix.branch == 'master' || matrix.branch == 'release-branch.go1.26' || matrix.branch == 'release-branch.go1.25' || matrix.branch == 'release-branch.go1.24' }}
         run: |
           patch -p1 -d /opt/go < 02-checklinkname.patch
-      - name: Patch 10-http2date.patch
-        if: ${{ matrix.branch == 'master' || matrix.branch == 'release-branch.go1.25' }}
-        run: |
-          patch -p1 -d /opt/go < 10-http2date.patch
       - name: Commit
         run: |
           cd /opt/go/src
