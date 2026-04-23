@@ -59,6 +59,8 @@ jobs:
           test -d ${{ matrix.goos }}_${{ matrix.goarch }} && rm -f go gofmt && mv -f ${{ matrix.goos }}_${{ matrix.goarch }}/* . && rmdir ${{ matrix.goos }}_${{ matrix.goarch }}
           cd /opt
           gover=$(echo ${{ matrix.branch }} | grep -oP 'go1.+' || echo gotip)
+          rm -rf go/.git
+          test "${{ matrix.goos }}_${{ matrix.goarch }}" == "linux_amd64" || rm -rf go/pkg/tool/linux_amd64/
           tar c go | xz -9 -T 4 >/tmp/${gover}.${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
       - name: Release
         run: |
