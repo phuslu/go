@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        branch: [master, release-branch.go1.26, release-branch.go1.25, release-branch.go1.24]
+        branch: [master, release-branch.go1.27, release-branch.go1.26, release-branch.go1.25]
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
     steps:
