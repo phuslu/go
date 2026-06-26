@@ -34,7 +34,7 @@ jobs:
           patch -p1 -d /opt/go < 01-goenv.patch
           patch -p1 -d /opt/go < 10-httpuseragent.patch
       - name: Patch 02-checklinkname.patch
-        if: ${{ matrix.branch == 'master' || matrix.branch == 'release-branch.go1.26' || matrix.branch == 'release-branch.go1.25' || matrix.branch == 'release-branch.go1.24' }}
+        if: ${{ matrix.branch == 'master' || matrix.branch == 'release-branch.go1.27' || matrix.branch == 'release-branch.go1.26' || matrix.branch == 'release-branch.go1.25' || matrix.branch == 'release-branch.go1.24' }}
         run: |
           patch -p1 -d /opt/go < 02-checklinkname.patch
       - name: Commit
